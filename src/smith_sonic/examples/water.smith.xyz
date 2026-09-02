@@ -1,0 +1,10 @@
+3
+Water example for the reduced standalone SMITH profile
+O       0.00000000      0.00000000      0.00000000
+H       0.75860200      0.00000000      0.50428400
+H      -0.75860200      0.00000000      0.50428400
+
+#SMITH
+schema = matrix.smith.input.v1
+symmetrize = true
+

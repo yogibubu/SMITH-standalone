@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smith-sonic"
+version = "0.1.0rc7"
+description = "Standalone SMITH builder for SONIC internal-coordinate contracts"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8",
+]
+
+[project.scripts]
+smith-sonic = "smith_sonic.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+smith_sonic = ["examples/*.xyz", "examples/*.xyzin"]
+matrix_core = ["parameters/*.toml", "parameters/fortran/*.inc"]
+matrix_smith = ["schemas/*.json", "survibfit/*.json"]

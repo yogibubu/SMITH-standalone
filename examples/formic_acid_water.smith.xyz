@@ -1,0 +1,14 @@
+8
+Formic acid-water non-covalent hydrogen-bond probe
+C    -1.171727   -0.018999   -0.001370
+H    -2.256869    0.130369   -0.015107
+O    -0.651376   -1.113045    0.004964
+O    -0.533544    1.143228    0.007603
+H     0.435203    0.960633    0.019343
+O     1.930145   -0.025976   -0.052269
+H     2.594643   -0.128917    0.633345
+H     1.351317   -0.802634    0.008831
+
+#SMITH
+schema = matrix.smith.input.v1
+fragment_mode = special-coordinates

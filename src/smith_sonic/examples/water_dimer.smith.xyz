@@ -1,0 +1,14 @@
+6
+Water dimer standalone SMITH non-covalent example
+O      -1.45000000       0.00000000       0.00000000
+H      -0.49000000       0.00000000       0.00000000
+H      -1.75000000       0.91000000       0.00000000
+O       1.45000000       0.00000000       0.00000000
+H       1.75000000       0.91000000       0.00000000
+H       1.75000000      -0.45500000       0.78808312
+
+#SMITH
+fragment_mode = special-coordinates
+symmetrize = false
+sycart = false
+g16 = true

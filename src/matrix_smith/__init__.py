@@ -2,6 +2,25 @@
 
 from .runtime.gicforge_python import LocalCoordinationMatch, LocalSALCSettings
 
+from .sonic_force_constant_atlas import (
+    COVALENT_RADII_BOND_ORDER_EQUILIBRIUM,
+    DEFAULT_SH_ATLAS,
+    DEFAULT_SONIC_FORCE_CONSTANT_ATLAS,
+    FAMILY_CONSTANT_EQUILIBRIUM,
+    MINIMUM_REGIME,
+    REACTION_MODE,
+    TRANSITION_STATE_REGIME,
+    SonicAtomDescriptor,
+    SonicBondDescriptor,
+    SonicCoordinateEnvironment,
+    SonicDiagonalQuadraticEvaluation,
+    SonicFamilyForceConstant,
+    SonicForceConstantAtlas,
+    sonic_atom_descriptors_from_xyzin,
+    sonic_coordinate_environment,
+    sonic_primitive_environments_from_xyzin,
+)
+
 from .contracts import (
     ORACLE_XYZ_GIC_SCHEMA,
     ORACLE_XYZ_SYCART_SCHEMA,
@@ -255,6 +274,22 @@ from .cv_geometry import (
 )
 
 __all__ = [
+    "COVALENT_RADII_BOND_ORDER_EQUILIBRIUM",
+    "DEFAULT_SH_ATLAS",
+    "DEFAULT_SONIC_FORCE_CONSTANT_ATLAS",
+    "FAMILY_CONSTANT_EQUILIBRIUM",
+    "MINIMUM_REGIME",
+    "REACTION_MODE",
+    "TRANSITION_STATE_REGIME",
+    "SonicAtomDescriptor",
+    "SonicBondDescriptor",
+    "SonicCoordinateEnvironment",
+    "SonicDiagonalQuadraticEvaluation",
+    "SonicFamilyForceConstant",
+    "SonicForceConstantAtlas",
+    "sonic_atom_descriptors_from_xyzin",
+    "sonic_coordinate_environment",
+    "sonic_primitive_environments_from_xyzin",
     "LocalCoordinationMatch",
     "LocalSALCSettings",
     "DEFAULT_COORDINATE_GENERATOR_REGISTRY",

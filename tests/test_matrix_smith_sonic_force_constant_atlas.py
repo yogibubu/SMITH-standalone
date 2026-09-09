@@ -38,10 +38,48 @@ def test_atlas_receives_complete_atom_typing_and_bond_order():
     assert single.atoms[0].partial_charge == pytest.approx(-0.12)
 
 
-def test_periodic_torsion_curvature_includes_declared_periodicity():
+def test_torsion_curvature_is_ni_nj_times_baker_and_central_bond_order_typed():
     from matrix_smith.sonic_force_constant_atlas import (
         DEFAULT_SONIC_FORCE_CONSTANT_ATLAS,
-        PERIODIC_COSINE_POTENTIAL,
+        BAKER_TORSION_OFFSET,
+        SonicBondDescriptor,
+        SonicCoordinateEnvironment,
+    )
+
+    atoms = tuple(_atom(index, 6 if index in {2, 3} else 1, 5.9, 0.0) for index in range(1, 9))
+    substituent_bonds = (
+        SonicBondDescriptor(1, 2, 1.0),
+        SonicBondDescriptor(2, 5, 1.0),
+        SonicBondDescriptor(2, 6, 1.0),
+        SonicBondDescriptor(3, 4, 1.0),
+        SonicBondDescriptor(3, 7, 1.0),
+        SonicBondDescriptor(3, 8, 1.0),
+    )
+    single = SonicCoordinateEnvironment(
+        atoms=atoms,
+        bonds=(*substituent_bonds, SonicBondDescriptor(2, 3, 1.0)),
+        coordinate_atom_indices=(1, 2, 3, 4),
+    )
+    double = SonicCoordinateEnvironment(
+        atoms=atoms,
+        bonds=(*substituent_bonds, SonicBondDescriptor(2, 3, 2.0)),
+        coordinate_atom_indices=(1, 2, 3, 4),
+    )
+    entry = DEFAULT_SONIC_FORCE_CONSTANT_ATLAS.entry("TORSION")
+
+    single_k = entry.resolve_force_constant(single)
+    double_k = entry.resolve_force_constant(double)
+
+    assert single.torsional_substituent_counts() == (3, 3)
+    assert single_k == pytest.approx(3 * 3 * BAKER_TORSION_OFFSET)
+    assert double_k > 8.0 * single_k
+
+
+def test_periodicity_changes_the_force_field_shape_but_not_the_sh_curvature():
+    from matrix_smith.sonic_force_constant_atlas import (
+        BAKER_TORSION_OFFSET,
+        DEFAULT_SONIC_FORCE_CONSTANT_ATLAS,
+        SonicBondDescriptor,
         SonicCoordinateEnvironment,
     )
 
@@ -51,17 +89,23 @@ def test_periodic_torsion_curvature_includes_declared_periodicity():
             _atom(2, 6, 5.9, 0.0),
             _atom(3, 6, 5.9, 0.0),
             _atom(4, 6, 5.9, 0.1),
-        )
+        ),
+        bonds=(
+            SonicBondDescriptor(1, 2, 1.0),
+            SonicBondDescriptor(2, 3, 1.0),
+            SonicBondDescriptor(3, 4, 1.0),
+        ),
+        coordinate_atom_indices=(1, 2, 3, 4),
     )
     entry = DEFAULT_SONIC_FORCE_CONSTANT_ATLAS.entry("TORSION")
+    resolved = entry.resolve_force_constant(environment)
     evaluation = DEFAULT_SONIC_FORCE_CONSTANT_ATLAS.evaluate_force_field(
         (1.0e-5,), ("TORSION",), (environment,)
     )
 
-    assert entry.potential_model == PERIODIC_COSINE_POTENTIAL
-    assert entry.periodicity == 3
-    assert evaluation.hessian_diagonal[0] == pytest.approx(entry.force_constant * math.cos(3.0e-5))
-    assert evaluation.gradient[0] / 1.0e-5 == pytest.approx(entry.force_constant, rel=1.0e-8)
+    assert resolved == pytest.approx(BAKER_TORSION_OFFSET)
+    assert evaluation.hessian_diagonal[0] == pytest.approx(resolved * math.cos(3.0e-5))
+    assert evaluation.gradient[0] / 1.0e-5 == pytest.approx(resolved, rel=1.0e-8)
 
 
 def test_minimum_atlas_covers_every_nonreactive_smith_family():

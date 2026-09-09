@@ -53,6 +53,7 @@ from .primitive_coordinates import (
     validate_primitive_contract,
     write_primitive_contract,
 )
+from .swart_lindh_hessian import DEFAULT_SPECIAL_EDGE_EFFECTIVE_ORDER
 from .accuracy_ladder import (
     AccuracyLadderPlan,
     BackTransformationResult,
@@ -190,6 +191,7 @@ __all__ = [
     "BOHR_TO_ANGSTROM",
     "CHEMICAL_COUPLING_RELATIONS",
     "BackTransformationResult",
+    "DEFAULT_SPECIAL_EDGE_EFFECTIVE_ORDER",
     "Primitive",
     "PrimitiveCoordinateContract",
     "PrimitiveForceFieldResult",

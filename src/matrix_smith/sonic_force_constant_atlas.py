@@ -30,6 +30,18 @@ SONIC_EQUILIBRIUM_MODELS = frozenset(
     {FAMILY_CONSTANT_EQUILIBRIUM, COVALENT_RADII_BOND_ORDER_EQUILIBRIUM}
 )
 STRETCH_BOND_ORDER_EXPONENT = -0.16
+BAKER_TORSION_OFFSET = 0.0023
+BAKER_TORSION_OVERLAP_SLOPE = 0.07
+ANGSTROM_TO_BOHR = 1.8897261254578281
+CENTRAL_BOND_TORSION_FAMILIES = frozenset(
+    {
+        "TORSION",
+        "PSEUDO_CYCLE_TORSION",
+        "CYCLIC_TORSION",
+        "CONDENSED_RING_TORSION",
+        "PSEUDO_BOND_TORSION",
+    }
+)
 HARMONIC_POTENTIAL = "HARMONIC"
 PERIODIC_COSINE_POTENTIAL = "PERIODIC_COSINE"
 SONIC_POTENTIAL_MODELS = frozenset({HARMONIC_POTENTIAL, PERIODIC_COSINE_POTENTIAL})
@@ -85,14 +97,22 @@ class SonicCoordinateEnvironment:
 
     atoms: tuple[SonicAtomDescriptor, ...]
     bonds: tuple[SonicBondDescriptor, ...] = ()
+    coordinate_atom_indices: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         atoms = tuple(self.atoms)
         bonds = tuple(self.bonds)
+        coordinate_atoms = tuple(int(index) for index in self.coordinate_atom_indices)
         indexes = tuple(atom.atom_index for atom in atoms)
         if not atoms or len(set(indexes)) != len(indexes):
             raise ValueError("a SONIC environment needs unique typed atoms")
         allowed = set(indexes)
+        if not coordinate_atoms:
+            coordinate_atoms = indexes
+        if len(set(coordinate_atoms)) != len(coordinate_atoms) or not set(
+            coordinate_atoms
+        ).issubset(allowed):
+            raise ValueError("SONIC coordinate atoms must be unique members of the typed context")
         pairs: set[tuple[int, int]] = set()
         for bond in bonds:
             pair = (bond.atom_index_a, bond.atom_index_b)
@@ -101,6 +121,7 @@ class SonicCoordinateEnvironment:
             pairs.add(pair)
         object.__setattr__(self, "atoms", atoms)
         object.__setattr__(self, "bonds", bonds)
+        object.__setattr__(self, "coordinate_atom_indices", coordinate_atoms)
 
     def bond_order(self, atom_index_a: int, atom_index_b: int) -> float:
         pair = tuple(sorted((int(atom_index_a), int(atom_index_b))))
@@ -110,6 +131,26 @@ class SonicCoordinateEnvironment:
         if len(matches) != 1:
             raise ValueError(f"SONIC environment has no unique bond order for {pair}")
         return matches[0]
+
+    def torsional_substituent_counts(self) -> tuple[int, int]:
+        """Return n_i,n_j on the two sides of the central torsional bond."""
+
+        if len(self.coordinate_atom_indices) != 4:
+            raise ValueError("a proper torsion needs four ordered coordinate atoms")
+        _, left, right, _ = self.coordinate_atom_indices
+        left_count = sum(
+            left in (bond.atom_index_a, bond.atom_index_b)
+            and right not in (bond.atom_index_a, bond.atom_index_b)
+            for bond in self.bonds
+        )
+        right_count = sum(
+            right in (bond.atom_index_a, bond.atom_index_b)
+            and left not in (bond.atom_index_a, bond.atom_index_b)
+            for bond in self.bonds
+        )
+        if left_count < 1 or right_count < 1:
+            raise ValueError("a proper torsion needs substituents on both sides")
+        return int(left_count), int(right_count)
 
 
 @dataclass(frozen=True)
@@ -203,6 +244,34 @@ class SonicFamilyForceConstant:
             )
         raise AssertionError(f"unhandled SONIC equilibrium model {self.equilibrium_model}")
 
+    def resolve_force_constant(self, environment: SonicCoordinateEnvironment) -> float:
+        """Resolve the typed local curvature without using coordinate periodicity."""
+
+        if not isinstance(environment, SonicCoordinateEnvironment):
+            raise TypeError("the SONIC atlas requires a typed coordinate environment")
+        if self.family not in CENTRAL_BOND_TORSION_FAMILIES:
+            return self.force_constant
+        if len(environment.coordinate_atom_indices) != 4:
+            raise ValueError(f"{self.family} curvature requires four ordered atoms")
+        _, left_index, right_index, _ = environment.coordinate_atom_indices
+        by_index = {atom.atom_index: atom for atom in environment.atoms}
+        left = by_index[left_index]
+        right = by_index[right_index]
+        order = environment.bond_order(left_index, right_index)
+        n_i, n_j = environment.torsional_substituent_counts()
+        from matrix_chem.topology.covalent_radii import covalent_radius
+
+        radii_sum = float(covalent_radius(left.atomic_number)) + float(
+            covalent_radius(right.atomic_number)
+        )
+        typed_distance_angstrom = radii_sum * order**STRETCH_BOND_ORDER_EXPONENT
+        overlap_bohr = max(
+            (radii_sum - typed_distance_angstrom) * ANGSTROM_TO_BOHR,
+            0.0,
+        )
+        baker_single_dihedral = BAKER_TORSION_OFFSET + BAKER_TORSION_OVERLAP_SLOPE * overlap_bohr
+        return float(n_i * n_j) * baker_single_dihedral
+
 
 @dataclass(frozen=True)
 class SonicDiagonalQuadraticEvaluation:
@@ -254,12 +323,21 @@ class SonicForceConstantAtlas:
     def diagonal(
         self,
         families: Sequence[str],
+        environments: Sequence[SonicCoordinateEnvironment] | None = None,
         *,
         regime: str = MINIMUM_REGIME,
     ) -> tuple[float, ...]:
         """Return the local-family diagonal with no basis transformation."""
 
-        return tuple(self.entry(family, regime=regime).force_constant for family in families)
+        if environments is None:
+            return tuple(self.entry(family, regime=regime).force_constant for family in families)
+        contexts = tuple(environments)
+        if len(contexts) != len(families):
+            raise ValueError("SONIC family and environment lists must have equal length")
+        return tuple(
+            self.entry(family, regime=regime).resolve_force_constant(environment)
+            for family, environment in zip(families, contexts)
+        )
 
     def equilibria(
         self,
@@ -289,7 +367,7 @@ class SonicForceConstantAtlas:
         """Evaluate E=1/2 sum_i k_i(q_i-q0_i)^2 directly in local SONICs."""
 
         values = tuple(float(value) for value in coordinate_values)
-        diagonal = self.diagonal(families, regime=regime)
+        diagonal = self.diagonal(families, environments, regime=regime)
         equilibria = self.equilibria(families, environments, regime=regime)
         if len(values) != len(diagonal) or not all(math.isfinite(value) for value in values):
             raise ValueError("SONIC coordinate and family lists must be finite and equal length")
@@ -329,8 +407,8 @@ class SonicForceConstantAtlas:
         energy = 0.0
         gradient: list[float] = []
         hessian: list[float] = []
-        for entry, displacement in zip(entries, displacements):
-            k = entry.force_constant
+        for entry, environment, displacement in zip(entries, environments, displacements):
+            k = entry.resolve_force_constant(environment)
             if entry.potential_model == HARMONIC_POTENTIAL:
                 energy += 0.5 * k * displacement * displacement
                 gradient.append(k * displacement)
@@ -405,6 +483,8 @@ def sonic_coordinate_environment(
     atom_indices: Sequence[int],
     atom_descriptors: Sequence[SonicAtomDescriptor],
     bond_orders: Mapping[tuple[int, int], float],
+    *,
+    coordinate_atom_indices: Sequence[int] | None = None,
 ) -> SonicCoordinateEnvironment:
     """Select the complete local typing context for one primitive support."""
 
@@ -420,7 +500,15 @@ def sonic_coordinate_environment(
         for (left, right), order in sorted(bond_orders.items())
         if left in local_set and right in local_set
     )
-    return SonicCoordinateEnvironment(atoms=local_atoms, bonds=bonds)
+    return SonicCoordinateEnvironment(
+        atoms=local_atoms,
+        bonds=bonds,
+        coordinate_atom_indices=(
+            indexes
+            if coordinate_atom_indices is None
+            else tuple(int(index) for index in coordinate_atom_indices)
+        ),
+    )
 
 
 def sonic_primitive_environments_from_xyzin(
@@ -443,6 +531,10 @@ def sonic_primitive_environments_from_xyzin(
         read_sectioned_lines(Path(path)),
         natoms=len(tuple(atoms)),
     )
+    adjacency: dict[int, set[int]] = {}
+    for left, right in bond_orders:
+        adjacency.setdefault(left, set()).add(right)
+        adjacency.setdefault(right, set()).add(left)
     cache: dict[str, tuple[int, ...]] = {}
 
     def support(identifier: str, visiting: frozenset[str] = frozenset()) -> tuple[int, ...]:
@@ -473,14 +565,26 @@ def sonic_primitive_environments_from_xyzin(
         cache[identifier] = result
         return result
 
-    return tuple(
-        sonic_coordinate_environment(
-            support(primitive.identifier),
-            atom_descriptors,
-            bond_orders,
+    environments = []
+    for primitive in primitives:
+        coordinate_atoms = tuple(int(index) for index in primitive.atoms)
+        context_atoms = list(support(primitive.identifier))
+        if (
+            str(primitive.family).strip().upper() in CENTRAL_BOND_TORSION_FAMILIES
+            and len(coordinate_atoms) == 4
+        ):
+            left, right = coordinate_atoms[1:3]
+            context_atoms.extend(sorted(adjacency.get(left, set()).difference({right})))
+            context_atoms.extend(sorted(adjacency.get(right, set()).difference({left})))
+        environments.append(
+            sonic_coordinate_environment(
+                tuple(dict.fromkeys(context_atoms)),
+                atom_descriptors,
+                bond_orders,
+                coordinate_atom_indices=coordinate_atoms,
+            )
         )
-        for primitive in primitives
-    )
+    return tuple(environments)
 
 
 def _minimum(

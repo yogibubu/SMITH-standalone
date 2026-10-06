@@ -75,15 +75,15 @@ Every `build` or `example` command writes three files with the same stem:
 - `.xyzin`: frozen SMITH/SONIC contract;
 - `.smith.out`: readable coordinate report with rank, families, protected
   rows, values, units, irreps, active/frozen status, and primitive coefficients;
-- `.g16.gjf`: Gaussian 16 Rev. C.01 `ReadAllGIC` optimization input.
+- `.g16.gjf`: Gaussian 16 Rev. C.02 `ReadAllGIC` optimization input.
 
-Gaussian 16 Rev. C.01 is used because its general `ReadAllGIC` language can interpret
+Gaussian 16 Rev. C.02 is used because its general `ReadAllGIC` language can interpret
 SONIC expressions directly and independently.  SONIC serialization is one
 particular use of this much broader GIC language.  The profile is enabled by
 default, uses Gaussian-compatible improper dihedrals, and marks every
 non-totally symmetric coordinate as `Frozen`; totally symmetric coordinates
 remain active.  Fragment and interaction-centre helper functions are serialized
-as `Inactive` definitions.  Gaussian 16 Rev. C.01 does not support native SONIC
+as `Inactive` definitions.  Gaussian 16 Rev. C.02 does not support native SONIC
 out-of-plane rows or every special/multi-periodic composite expression.  The
 `.g16.gjf` writer therefore performs a terminal compatibility translation;
 native out-of-plane and special coordinates remain unchanged in `.xyzin` and
